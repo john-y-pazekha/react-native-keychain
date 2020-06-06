@@ -15,7 +15,7 @@ import com.facebook.crypto.Entity;
 import com.facebook.crypto.keychain.KeyChain;
 import com.facebook.react.bridge.AssertionException;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.oblador.keychain.KeychainModule.KnownCiphers;
+import com.oblador.keychain.KeychainModuleReactDecorator.KnownCiphers;
 import com.oblador.keychain.SecurityLevel;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 

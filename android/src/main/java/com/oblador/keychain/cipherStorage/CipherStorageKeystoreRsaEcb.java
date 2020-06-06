@@ -12,7 +12,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.oblador.keychain.KeychainModule;
 import com.oblador.keychain.SecurityLevel;
 import com.oblador.keychain.exceptions.CryptoFailedException;
 import com.oblador.keychain.exceptions.KeyStoreAccessException;
@@ -33,6 +32,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.crypto.NoSuchPaddingException;
+
+import static com.oblador.keychain.KeychainModuleReactDecorator.*;
 
 /** Fingerprint biometry protected storage. */
 @RequiresApi(api = Build.VERSION_CODES.M)
@@ -149,7 +150,7 @@ public class CipherStorageKeystoreRsaEcb extends CipherStorageBase {
   /** RSAECB. */
   @Override
   public String getCipherStorageName() {
-    return KeychainModule.KnownCiphers.RSA;
+    return KnownCiphers.RSA;
   }
 
   /** API23 is a requirement. */

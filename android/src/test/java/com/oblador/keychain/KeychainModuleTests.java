@@ -13,10 +13,10 @@ import androidx.test.core.app.ApplicationProvider;
 import com.facebook.react.bridge.JavaOnlyMap;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.oblador.keychain.KeychainModule.AccessControl;
-import com.oblador.keychain.KeychainModule.Errors;
-import com.oblador.keychain.KeychainModule.KnownCiphers;
-import com.oblador.keychain.KeychainModule.Maps;
+import com.oblador.keychain.KeychainModuleReactDecorator.AccessControl;
+import com.oblador.keychain.KeychainModuleReactDecorator.Errors;
+import com.oblador.keychain.KeychainModuleReactDecorator.KnownCiphers;
+import com.oblador.keychain.KeychainModuleReactDecorator.Maps;
 import com.oblador.keychain.cipherStorage.CipherStorage;
 import com.oblador.keychain.cipherStorage.CipherStorageBase;
 import com.oblador.keychain.cipherStorage.CipherStorageFacebookConceal;
@@ -46,6 +46,7 @@ import java.security.Security;
 
 import javax.crypto.Cipher;
 
+import static com.oblador.keychain.KeychainModuleReactDecorator.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
@@ -334,7 +335,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_Unspecified_api28() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // WHEN:
@@ -349,7 +350,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_Unspecified_api23() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // WHEN:
@@ -364,7 +365,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_Unspecified_api21() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // WHEN:
@@ -379,7 +380,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_Unspecified_api19() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // WHEN:
@@ -394,7 +395,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_NoBiometry_api28() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // WHEN:
@@ -412,7 +413,7 @@ public class KeychainModuleTests {
   public void testGetSecurityLevel_NoBiometry_NoSecuredHardware_api28() throws Exception {
     // GIVE:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, new KeychainModule(context, new BiometricCapabilitiesHelper(context)));
     final Promise mockPromise = mock(Promise.class);
 
     // set key info - software method
@@ -438,11 +439,12 @@ public class KeychainModuleTests {
   public void testDowngradeBiometricToAes_api28() throws Exception {
     // GIVEN:
     final ReactApplicationContext context = getRNContext();
-    final KeychainModule module = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    KeychainModule impl = new KeychainModule(context, new BiometricCapabilitiesHelper(context));
+    final KeychainModuleReactDecorator module = new KeychainModuleReactDecorator(context, impl);
     final PrefsStorage prefs = new PrefsStorage(context);
     final Cipher mockCipher = Mockito.mock(Cipher.class);
     final KeyStore mockKeyStore = Mockito.mock(KeyStore.class);
-    final CipherStorage storage = module.getCipherStorageByName(KnownCiphers.RSA);
+    final CipherStorage storage = impl.getCipherStorageByName(KnownCiphers.RSA);
     final CipherStorage.EncryptionResult result = new CipherStorage.EncryptionResult(BYTES_USERNAME, BYTES_PASSWORD, storage);
     final Promise mockPromise = mock(Promise.class);
     final JavaOnlyMap options = new JavaOnlyMap();

@@ -8,7 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.oblador.keychain.KeychainModule.KnownCiphers;
+import com.oblador.keychain.KeychainModuleReactDecorator.KnownCiphers;
 import com.oblador.keychain.cipherStorage.CipherStorage;
 import com.oblador.keychain.cipherStorage.CipherStorage.EncryptionResult;
 

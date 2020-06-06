@@ -7,19 +7,12 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.StringDef;
 import androidx.biometric.BiometricPrompt;
 import androidx.biometric.BiometricPrompt.PromptInfo;
 import androidx.fragment.app.FragmentActivity;
 
-import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.AssertionException;
-import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.WritableMap;
 import com.oblador.keychain.PrefsStorage.ResultSet;
 import com.oblador.keychain.cipherStorage.CipherStorage;
 import com.oblador.keychain.cipherStorage.CipherStorage.DecryptionContext;
@@ -43,11 +36,11 @@ import java.util.concurrent.TimeUnit;
 
 import javax.crypto.Cipher;
 
-@SuppressWarnings({"unused", "WeakerAccess", "SameParameterValue"})
-public class KeychainModule extends ReactContextBaseJavaModule implements BiometricCapabilitiesHelper.CapabilitiesChangeListener {
+import static com.oblador.keychain.KeychainModuleReactDecorator.*;
+
+public class KeychainModule implements BiometricCapabilitiesHelper.CapabilitiesChangeListener {
   //region Constants
   public static final String KEYCHAIN_MODULE = "RNKeychainManager";
-  public static final String EMPTY_STRING = "";
   /**
    * Allow this number of milliseconds for the biometric subsystem to start. If exceeded, the biometry is reported
    * as temporary unavailable but the initialization will continue in background. Once complete, the upper layers
@@ -56,79 +49,10 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
   public static final int BIOMETRY_STARTUP_TIMEOUT_MILLIS = 300;
 
   private static final String LOG_TAG = KeychainModule.class.getSimpleName();
-
-  @StringDef({AccessControl.NONE
-    , AccessControl.USER_PRESENCE
-    , AccessControl.BIOMETRY_ANY
-    , AccessControl.BIOMETRY_CURRENT_SET
-    , AccessControl.DEVICE_PASSCODE
-    , AccessControl.APPLICATION_PASSWORD
-    , AccessControl.BIOMETRY_ANY_OR_DEVICE_PASSCODE
-    , AccessControl.BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE})
-  @interface AccessControl {
-    String NONE = "None";
-    String USER_PRESENCE = "UserPresence";
-    String BIOMETRY_ANY = "BiometryAny";
-    String BIOMETRY_CURRENT_SET = "BiometryCurrentSet";
-    String DEVICE_PASSCODE = "DevicePasscode";
-    String APPLICATION_PASSWORD = "ApplicationPassword";
-    String BIOMETRY_ANY_OR_DEVICE_PASSCODE = "BiometryAnyOrDevicePasscode";
-    String BIOMETRY_CURRENT_SET_OR_DEVICE_PASSCODE = "BiometryCurrentSetOrDevicePasscode";
-  }
-
-  @interface AuthPromptOptions {
-    String TITLE = "title";
-    String SUBTITLE = "subtitle";
-    String DESCRIPTION = "description";
-    String CANCEL = "cancel";
-  }
-
-  /** Options mapping keys. */
-  @interface Maps {
-    String ACCESS_CONTROL = "accessControl";
-    String ACCESS_GROUP = "accessGroup";
-    String ACCESSIBLE = "accessible";
-    String AUTH_PROMPT = "authenticationPrompt";
-    String AUTH_TYPE = "authenticationType";
-    String SERVICE = "service";
-    String SECURITY_LEVEL = "securityLevel";
-    String RULES = "rules";
-
-    String USERNAME = "username";
-    String PASSWORD = "password";
-    String STORAGE = "storage";
-  }
-
-  /** Known error codes. */
-  @interface Errors {
-    String E_EMPTY_PARAMETERS = "E_EMPTY_PARAMETERS";
-    String E_CRYPTO_FAILED = "E_CRYPTO_FAILED";
-    String E_KEYSTORE_ACCESS_ERROR = "E_KEYSTORE_ACCESS_ERROR";
-    String E_SUPPORTED_BIOMETRY_ERROR = "E_SUPPORTED_BIOMETRY_ERROR";
-    /** Raised for unexpected errors. */
-    String E_UNKNOWN_ERROR = "E_UNKNOWN_ERROR";
-  }
-
-  /** Supported ciphers. */
-  @StringDef({KnownCiphers.FB, KnownCiphers.AES, KnownCiphers.RSA})
-  public @interface KnownCiphers {
-    /** Facebook conceal compatibility lib in use. */
-    String FB = "FacebookConceal";
-    /** AES encryption. */
-    String AES = "KeystoreAESCBC";
-    /** Biometric + RSA. */
-    String RSA = "KeystoreRSAECB";
-  }
-
-  /** Secret manipulation rules. */
-  @StringDef({Rules.AUTOMATIC_UPGRADE, Rules.NONE})
-  @interface Rules {
-    String NONE = "none";
-    String AUTOMATIC_UPGRADE = "automaticUpgradeToMoreSecuredStorage";
-  }
   //endregion
 
   //region Members
+  private final ReactApplicationContext reactContext;
   private final BiometricCapabilitiesHelper biometricCapabilities;
   /** Name-to-instance lookup  map. */
   private final Map<String, CipherStorage> cipherStorageMap = new HashMap<>();
@@ -140,9 +64,8 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
 
   /** Default constructor. */
   public KeychainModule(@NonNull final ReactApplicationContext reactContext, @NonNull final BiometricCapabilitiesHelper biometricCapabilitiesHelper) {
-    super(reactContext);
+    this.reactContext = reactContext;
     this.biometricCapabilities = biometricCapabilitiesHelper;
-
     prefsStorage = new PrefsStorage(reactContext);
 
     addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext));
@@ -202,83 +125,38 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
   }
   //endregion
 
-  //region Overrides
-
-  /** {@inheritDoc} */
-  @Override
-  @NonNull
-  public String getName() {
-    return KEYCHAIN_MODULE;
-  }
-
-  /** {@inheritDoc} */
-  @NonNull
-  @Override
-  public Map<String, Object> getConstants() {
-    final Map<String, Object> constants = new HashMap<>();
-
-    constants.put(SecurityLevel.ANY.jsName(), SecurityLevel.ANY.name());
-    constants.put(SecurityLevel.SECURE_SOFTWARE.jsName(), SecurityLevel.SECURE_SOFTWARE.name());
-    constants.put(SecurityLevel.SECURE_HARDWARE.jsName(), SecurityLevel.SECURE_HARDWARE.name());
-
-    return constants;
-  }
-  //endregion
 
   //region React Methods
-  protected void setGenericPassword(@NonNull final String alias,
+  public String setGenericPassword(@NonNull final String alias,
+                                   @NonNull final String username,
+                                   @NonNull final String password,
+                                   @NonNull final SecurityLevel level,
+                                   @NonNull final String cipherName,
+                                   boolean useBiometry) throws CryptoFailedException, EmptyParameterException
+  {
+    final CipherStorage storage = getSelectedStorage(useBiometry, cipherName);
+    return setGenericPassword(alias, username, password, level, storage);
+  }
+
+  private String setGenericPassword(@NonNull final String alias,
                                     @NonNull final String username,
                                     @NonNull final String password,
-                                    @Nullable final ReadableMap options,
-                                    @NonNull final Promise promise) {
-    try {
+                                    @NonNull SecurityLevel level,
+                                    @NonNull CipherStorage storage) throws EmptyParameterException, CryptoFailedException
+  {
       throwIfEmptyLoginPassword(username, password);
 
-      final SecurityLevel level = getSecurityLevelOrDefault(options);
-      final CipherStorage storage = getSelectedStorage(options);
-
-      throwIfInsufficientLevel(storage, level);
+    throwIfInsufficientLevel(storage, level);
 
       final EncryptionResult result = storage.encrypt(alias, username, password, level);
       prefsStorage.storeEncryptedEntry(alias, result);
-
-      final WritableMap results = Arguments.createMap();
-      results.putString(Maps.SERVICE, alias);
-      results.putString(Maps.STORAGE, storage.getCipherStorageName());
-
-      promise.resolve(results);
-    } catch (EmptyParameterException e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage(), e);
-
-      promise.reject(Errors.E_EMPTY_PARAMETERS, e);
-    } catch (CryptoFailedException e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage(), e);
-
-      promise.reject(Errors.E_CRYPTO_FAILED, e);
-    } catch (Throwable fail) {
-      Log.e(KEYCHAIN_MODULE, fail.getMessage(), fail);
-
-      promise.reject(Errors.E_UNKNOWN_ERROR, fail);
-    }
-  }
-
-  @ReactMethod
-  public void setGenericPasswordForOptions(@Nullable final ReadableMap options,
-                                           @NonNull final String username,
-                                           @NonNull final String password,
-                                           @NonNull final Promise promise) {
-    final String service = getServiceOrDefault(options);
-    setGenericPassword(service, username, password, options, promise);
+    return storage.getCipherStorageName();
   }
 
   /** Get Cipher storage instance based on user provided options. */
   @NonNull
-  private CipherStorage getSelectedStorage(@Nullable final ReadableMap options)
+  private CipherStorage getSelectedStorage(final boolean useBiometry, @Nullable final String cipherName)
     throws CryptoFailedException {
-    final String accessControl = getAccessControlOrDefault(options);
-    final boolean useBiometry = getUseBiometry(accessControl);
-    final String cipherName = getSpecificStorageOrDefault(options);
-
     CipherStorage result = null;
 
     if (null != cipherName) {
@@ -293,59 +171,25 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
     return result;
   }
 
-  protected void getGenericPassword(@NonNull final String alias,
-                                    @Nullable final ReadableMap options,
-                                    @NonNull final Promise promise) {
-    try {
+  public DecryptCredentialsResult getGenericPassword(@NonNull final String alias,
+                                                     @NonNull @Rules final String rules,
+                                                     @NonNull final PromptInfo promptInfo,
+                                                     final boolean useBiometry) throws CryptoFailedException, KeyStoreAccessException
+  {
       final ResultSet resultSet = prefsStorage.getEncryptedEntry(alias);
 
       if (resultSet == null) {
         Log.e(KEYCHAIN_MODULE, "No entry found for service: " + alias);
-        promise.resolve(false);
-        return;
+      return null;
       }
 
-      // get the best storage
-      final String accessControl = getAccessControlOrDefault(options);
-      final boolean useBiometry = getUseBiometry(accessControl);
-      final CipherStorage current = getCipherStorageForCurrentAPILevel(useBiometry);
-      final String rules = getSecurityRulesOrDefault(options);
-
-      final PromptInfo promptInfo = getPromptInfo(options);
+    final CipherStorage current = getCipherStorageForCurrentAPILevel(useBiometry);
       final DecryptionResult decryptionResult = decryptCredentials(alias, current, resultSet, rules, promptInfo);
 
-      final WritableMap credentials = Arguments.createMap();
-      credentials.putString(Maps.SERVICE, alias);
-      credentials.putString(Maps.USERNAME, decryptionResult.username);
-      credentials.putString(Maps.PASSWORD, decryptionResult.password);
-      credentials.putString(Maps.STORAGE, current.getCipherStorageName());
-
-      promise.resolve(credentials);
-    } catch (KeyStoreAccessException e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage());
-
-      promise.reject(Errors.E_KEYSTORE_ACCESS_ERROR, e);
-    } catch (CryptoFailedException e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage());
-
-      promise.reject(Errors.E_CRYPTO_FAILED, e);
-    } catch (Throwable fail) {
-      Log.e(KEYCHAIN_MODULE, fail.getMessage(), fail);
-
-      promise.reject(Errors.E_UNKNOWN_ERROR, fail);
-    }
+    return new DecryptCredentialsResult(decryptionResult.username, decryptionResult.password, current.getCipherStorageName());
   }
 
-  @ReactMethod
-  public void getGenericPasswordForOptions(@Nullable final ReadableMap options,
-                                           @NonNull final Promise promise) {
-    final String service = getServiceOrDefault(options);
-    getGenericPassword(service, options, promise);
-  }
-
-  protected void resetGenericPassword(@NonNull final String alias,
-                                      @NonNull final Promise promise) {
-    try {
+  public void do__resetGenericPassword(@NonNull final String alias) throws KeyStoreAccessException {
       // First we clean up the cipher storage (using the cipher storage that was used to store the entry)
       final ResultSet resultSet = prefsStorage.getEncryptedEntry(alias);
 
@@ -358,190 +202,28 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
       }
       // And then we remove the entry in the shared preferences
       prefsStorage.removeEntry(alias);
-
-      promise.resolve(true);
-    } catch (KeyStoreAccessException e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage());
-
-      promise.reject(Errors.E_KEYSTORE_ACCESS_ERROR, e);
-    } catch (Throwable fail) {
-      Log.e(KEYCHAIN_MODULE, fail.getMessage(), fail);
-
-      promise.reject(Errors.E_UNKNOWN_ERROR, fail);
-    }
   }
 
-  @ReactMethod
-  public void resetGenericPasswordForOptions(@Nullable final ReadableMap options,
-                                             @NonNull final Promise promise) {
-    final String service = getServiceOrDefault(options);
-    resetGenericPassword(service, promise);
-  }
-
-  @ReactMethod
-  public void hasInternetCredentialsForServer(@NonNull final String server,
-                                              @NonNull final Promise promise) {
-    final String alias = getAliasOrDefault(server);
-
+  public String hasInternetCredentialsForServer(@NonNull final String alias) {
+    final String res;
     final ResultSet resultSet = prefsStorage.getEncryptedEntry(alias);
 
     if (resultSet == null) {
       Log.e(KEYCHAIN_MODULE, "No entry found for service: " + alias);
-      promise.resolve(false);
-      return;
+      res = null;
+    } else {
+      res = resultSet.cipherStorageName;
     }
-
-    final WritableMap results = Arguments.createMap();
-    results.putString(Maps.SERVICE, alias);
-    results.putString(Maps.STORAGE, resultSet.cipherStorageName);
-
-    promise.resolve(results);
+    return res;
   }
 
-  @ReactMethod
-  public void setInternetCredentialsForServer(@NonNull final String server,
-                                              @NonNull final String username,
-                                              @NonNull final String password,
-                                              @Nullable final ReadableMap options,
-                                              @NonNull final Promise promise) {
-    setGenericPassword(server, username, password, options, promise);
-  }
-
-  @ReactMethod
-  public void getInternetCredentialsForServer(@NonNull final String server,
-                                              @Nullable final ReadableMap options,
-                                              @NonNull final Promise promise) {
-    getGenericPassword(server, options, promise);
-  }
-
-  @ReactMethod
-  public void resetInternetCredentialsForServer(@NonNull final String server,
-                                                @NonNull final Promise promise) {
-    resetGenericPassword(server, promise);
-  }
-
-  @ReactMethod
-  public void getSupportedBiometryType(@NonNull final Promise promise) {
-    try {
-      String reply = biometricCapabilities.getSupportedBiometryType();
-
-      promise.resolve(reply);
-    } catch (Exception e) {
-      Log.e(KEYCHAIN_MODULE, e.getMessage(), e);
-
-      promise.reject(Errors.E_SUPPORTED_BIOMETRY_ERROR, e);
-    } catch (Throwable fail) {
-      Log.e(KEYCHAIN_MODULE, fail.getMessage(), fail);
-
-      promise.reject(Errors.E_UNKNOWN_ERROR, fail);
-    }
-  }
-
-  @ReactMethod
-  public void getSecurityLevel(@Nullable final ReadableMap options,
-                               @NonNull final Promise promise) {
-    // DONE (olku): if forced biometry than we should return security level = HARDWARE if it supported
-    final String accessControl = getAccessControlOrDefault(options);
-    final boolean useBiometry = getUseBiometry(accessControl);
-
-    promise.resolve(getSecurityLevel(useBiometry).name());
+  public String getSupportedBiometryType() {
+    return biometricCapabilities.getSupportedBiometryType();
   }
   //endregion
 
   //region Helpers
 
-  /** Get service value from options. */
-  @NonNull
-  private static String getServiceOrDefault(@Nullable final ReadableMap options) {
-    String service = null;
-
-    if (null != options && options.hasKey(Maps.SERVICE)) {
-      service = options.getString(Maps.SERVICE);
-    }
-
-    return getAliasOrDefault(service);
-  }
-
-  /** Get automatic secret manipulation rules, default: Automatic Upgrade. */
-  @Rules
-  @NonNull
-  private static String getSecurityRulesOrDefault(@Nullable final ReadableMap options) {
-    return getSecurityRulesOrDefault(options, Rules.AUTOMATIC_UPGRADE);
-  }
-
-  /** Get automatic secret manipulation rules. */
-  @Rules
-  @NonNull
-  private static String getSecurityRulesOrDefault(@Nullable final ReadableMap options,
-                                                  @Rules @NonNull final String rule) {
-    String rules = null;
-
-    if (null != options && options.hasKey(Maps.RULES)) {
-      rules = options.getString(Maps.ACCESS_CONTROL);
-    }
-
-    if (null == rules) return rule;
-
-    return rules;
-  }
-
-  /** Extract user specified storage from options. */
-  @KnownCiphers
-  @Nullable
-  private static String getSpecificStorageOrDefault(@Nullable final ReadableMap options) {
-    String storageName = null;
-
-    if (null != options && options.hasKey(Maps.STORAGE)) {
-      storageName = options.getString(Maps.STORAGE);
-    }
-
-    return storageName;
-  }
-
-  /** Get access control value from options or fallback to {@link AccessControl#NONE}. */
-  @AccessControl
-  @NonNull
-  private static String getAccessControlOrDefault(@Nullable final ReadableMap options) {
-    return getAccessControlOrDefault(options, AccessControl.NONE);
-  }
-
-  /** Get access control value from options or fallback to default. */
-  @AccessControl
-  @NonNull
-  private static String getAccessControlOrDefault(@Nullable final ReadableMap options,
-                                                  @AccessControl @NonNull final String fallback) {
-    String accessControl = null;
-
-    if (null != options && options.hasKey(Maps.ACCESS_CONTROL)) {
-      accessControl = options.getString(Maps.ACCESS_CONTROL);
-    }
-
-    if (null == accessControl) return fallback;
-
-    return accessControl;
-  }
-
-
-  /** Get security level from options or fallback {@link SecurityLevel#ANY} value. */
-  @NonNull
-  private static SecurityLevel getSecurityLevelOrDefault(@Nullable final ReadableMap options) {
-    return getSecurityLevelOrDefault(options, SecurityLevel.ANY.name());
-  }
-
-  /** Get security level from options or fallback to default value. */
-  @NonNull
-  private static SecurityLevel getSecurityLevelOrDefault(@Nullable final ReadableMap options,
-                                                         @NonNull final String fallback) {
-    String minimalSecurityLevel = null;
-
-    if (null != options && options.hasKey(Maps.SECURITY_LEVEL)) {
-      minimalSecurityLevel = options.getString(Maps.SECURITY_LEVEL);
-    }
-
-    if (null == minimalSecurityLevel) minimalSecurityLevel = fallback;
-
-    return SecurityLevel.valueOf(minimalSecurityLevel);
-  }
   //endregion
 
   //region Implementation
@@ -556,33 +238,6 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
 
   private void addCipherStorageToMap(@NonNull final CipherStorage cipherStorage) {
     cipherStorageMap.put(cipherStorage.getCipherStorageName(), cipherStorage);
-  }
-
-  /** Extract user specified prompt info from options. */
-  @NonNull
-  private static PromptInfo getPromptInfo(@Nullable final ReadableMap options) {
-    final ReadableMap promptInfoOptionsMap = (options != null && options.hasKey(Maps.AUTH_PROMPT)) ? options.getMap(Maps.AUTH_PROMPT) : null;
-
-    final PromptInfo.Builder promptInfoBuilder = new PromptInfo.Builder();
-    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.TITLE)) {
-      String promptInfoTitle = promptInfoOptionsMap.getString(AuthPromptOptions.TITLE);
-      promptInfoBuilder.setTitle(promptInfoTitle);
-    }
-    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.SUBTITLE)) {
-      String promptInfoSubtitle = promptInfoOptionsMap.getString(AuthPromptOptions.SUBTITLE);
-      promptInfoBuilder.setSubtitle(promptInfoSubtitle);
-    }
-    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.DESCRIPTION)) {
-      String promptInfoDescription = promptInfoOptionsMap.getString(AuthPromptOptions.DESCRIPTION);
-      promptInfoBuilder.setDescription(promptInfoDescription);
-    }
-    if (null != promptInfoOptionsMap && promptInfoOptionsMap.hasKey(AuthPromptOptions.CANCEL)) {
-      String promptInfoNegativeButton = promptInfoOptionsMap.getString(AuthPromptOptions.CANCEL);
-      promptInfoBuilder.setNegativeButtonText(promptInfoNegativeButton);
-    }
-    final PromptInfo promptInfo = promptInfoBuilder.build();
-
-    return promptInfo;
   }
 
   /**
@@ -771,7 +426,7 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
 
   /** Resolve storage to security level it provides. */
   @NonNull
-  private SecurityLevel getSecurityLevel(final boolean useBiometry) {
+  public SecurityLevel getSecurityLevel(final boolean useBiometry) {
     try {
       final CipherStorage storage = getCipherStorageForCurrentAPILevel(useBiometry);
 
@@ -789,11 +444,6 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
 
       return SecurityLevel.ANY;
     }
-  }
-
-  @NonNull
-  private static String getAliasOrDefault(@Nullable final String service) {
-    return service == null ? EMPTY_STRING : service;
   }
   //endregion
 
@@ -817,7 +467,7 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
     public void askAccessPermissions(@NonNull final DecryptionContext context) {
       this.context = context;
 
-      if (!DeviceAvailability.isPermissionsGranted(getReactApplicationContext())) {
+      if (!DeviceAvailability.isPermissionsGranted(reactContext)) {
         final CryptoFailedException failure = new CryptoFailedException(
           "Could not start fingerprint Authentication. No permissions granted.");
 
@@ -876,7 +526,7 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
 
     /** trigger interactive authentication. */
     public void startAuthentication() {
-      final FragmentActivity activity = (FragmentActivity) getCurrentActivity();
+      final FragmentActivity activity = (FragmentActivity) reactContext.getCurrentActivity();
       if (null == activity) throw new NullPointerException("Not assigned current activity");
 
       // code can be executed only from MAIN thread
@@ -911,4 +561,16 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
     }
   }
   //endregion
+
+  public static class DecryptCredentialsResult {
+    public final String username;
+    public final String password;
+    public final String cipherStorageName;
+
+    public DecryptCredentialsResult(String username, String password, String cipherStorageName) {
+      this.username = username;
+      this.password = password;
+      this.cipherStorageName = cipherStorageName;
+    }
+  }
 }
