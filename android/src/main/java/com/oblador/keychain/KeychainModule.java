@@ -47,9 +47,6 @@ import javax.crypto.Cipher;
 public class KeychainModule extends ReactContextBaseJavaModule {
   //region Constants
   public static final String KEYCHAIN_MODULE = "RNKeychainManager";
-  public static final String FINGERPRINT_SUPPORTED_NAME = "Fingerprint";
-  public static final String FACE_SUPPORTED_NAME = "Face";
-  public static final String IRIS_SUPPORTED_NAME = "Iris";
   public static final String EMPTY_STRING = "";
 
   private static final String LOG_TAG = KeychainModule.class.getSimpleName();
@@ -126,6 +123,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   //endregion
 
   //region Members
+  private final BiometricCapabilitiesHelper biometricCapabilities;
   /** Name-to-instance lookup  map. */
   private final Map<String, CipherStorage> cipherStorageMap = new HashMap<>();
   /** Shared preferences storage. */
@@ -135,8 +133,10 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   //region Initialization
 
   /** Default constructor. */
-  public KeychainModule(@NonNull final ReactApplicationContext reactContext) {
+  public KeychainModule(@NonNull final ReactApplicationContext reactContext, @NonNull final BiometricCapabilitiesHelper biometricCapabilitiesHelper) {
     super(reactContext);
+    this.biometricCapabilities = biometricCapabilitiesHelper;
+
     prefsStorage = new PrefsStorage(reactContext);
 
     addCipherStorageToMap(new CipherStorageFacebookConceal(reactContext));
@@ -150,7 +150,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
 
   /** Allow initialization in chain. */
   public static KeychainModule withWarming(@NonNull final ReactApplicationContext reactContext) {
-    final KeychainModule instance = new KeychainModule(reactContext);
+    final KeychainModule instance = new KeychainModule(reactContext, new BiometricCapabilitiesHelper(reactContext));
 
     // force initialization of the crypto api in background thread
     final Thread warmingUp = new Thread(instance::internalWarmingBestCipher, "keychain-warming-up");
@@ -403,14 +403,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   @ReactMethod
   public void getSupportedBiometryType(@NonNull final Promise promise) {
     try {
-      String reply = null;
-      if(isFaceAuthAvailable()){
-        reply = FACE_SUPPORTED_NAME;
-      } else if(isIrisAuthAvailable()) {
-        reply = IRIS_SUPPORTED_NAME;
-      } else if(isFingerprintAuthAvailable()) {
-        reply = FINGERPRINT_SUPPORTED_NAME;
-      }
+      String reply = biometricCapabilities.getSupportedBiometryType();
 
       promise.resolve(reply);
     } catch (Exception e) {
@@ -678,7 +671,7 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   /* package */ CipherStorage getCipherStorageForCurrentAPILevel(final boolean useBiometry)
     throws CryptoFailedException {
     final int currentApiLevel = Build.VERSION.SDK_INT;
-    final boolean isBiometry = (isFingerprintAuthAvailable() || isFaceAuthAvailable() || isIrisAuthAvailable()) && useBiometry;
+    final boolean isBiometry = biometricCapabilities.isAnyBiometryAvailable() && useBiometry;
     CipherStorage foundCipher = null;
 
     for (CipherStorage variant : cipherStorageMap.values()) {
@@ -742,18 +735,9 @@ public class KeychainModule extends ReactContextBaseJavaModule {
   }
 
   /** True - if fingerprint hardware available and configured, otherwise false. */
+  @Deprecated  // Used only in tests! // TODO rectify test so they target BiometricCapabilitiesHelper instead of this class
   /* package */ boolean isFingerprintAuthAvailable() {
-    return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isFingerprintAuthAvailable(getReactApplicationContext());
-  }
-
-  /** True - if face recognition hardware available and configured, otherwise false. */
-  /* package */ boolean isFaceAuthAvailable() {
-    return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isFaceAuthAvailable(getReactApplicationContext());
-  }
-
-  /** True - if iris recognition hardware available and configured, otherwise false. */
-  /* package */ boolean isIrisAuthAvailable() {
-    return DeviceAvailability.isBiometricAuthAvailable(getReactApplicationContext()) && DeviceAvailability.isIrisAuthAvailable(getReactApplicationContext());
+    return biometricCapabilities.isFingerprintAuthAvailable();
   }
 
   /** Is secured hardware a part of current storage or not. */
