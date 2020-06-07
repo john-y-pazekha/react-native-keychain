@@ -48,6 +48,12 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
   //region Constants
   public static final String KEYCHAIN_MODULE = "RNKeychainManager";
   public static final String EMPTY_STRING = "";
+  /**
+   * Allow this number of milliseconds for the biometric subsystem to start. If exceeded, the biometry is reported
+   * as temporary unavailable but the initialization will continue in background. Once complete, the upper layers
+   * get a notification that it can be used now.
+   */
+  public static final int BIOMETRY_STARTUP_TIMEOUT_MILLIS = 300;
 
   private static final String LOG_TAG = KeychainModule.class.getSimpleName();
 
@@ -186,6 +192,13 @@ public class KeychainModule extends ReactContextBaseJavaModule implements Biomet
     } catch (Throwable ex) {
       Log.e(KEYCHAIN_MODULE, "warming up failed!", ex);
     }
+  }
+
+  /** Start with biometry warm-up. */
+  public static KeychainModule withBiometryProbing(@NonNull final ReactApplicationContext reactContext) {
+    final InhibitableBiometricCapabilitiesHelper helper = new InhibitableBiometricCapabilitiesHelper(reactContext);
+    new BiometryKickStarter(helper).tryStartBiometry(BIOMETRY_STARTUP_TIMEOUT_MILLIS);
+    return new KeychainModule(reactContext, helper);
   }
   //endregion
 
