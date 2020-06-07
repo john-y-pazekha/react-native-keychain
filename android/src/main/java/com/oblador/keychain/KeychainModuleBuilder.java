@@ -4,9 +4,11 @@ import com.facebook.react.bridge.ReactApplicationContext;
 
 public class KeychainModuleBuilder {
   public static final boolean DEFAULT_USE_WARM_UP = true;
+  public static final boolean DEFAULT_USE_PROBING = false;
 
   private ReactApplicationContext reactContext;
   private boolean useWarmUp = DEFAULT_USE_WARM_UP;
+  private boolean useProbing = DEFAULT_USE_PROBING;
 
   public KeychainModuleBuilder withReactContext(ReactApplicationContext reactContext) {
     this.reactContext = reactContext;
@@ -15,6 +17,12 @@ public class KeychainModuleBuilder {
 
   public KeychainModuleBuilder usingWarmUp() {
     useWarmUp = true;
+    return this;
+  }
+
+  public KeychainModuleBuilder usingProbingInsteadOfWarmUp() {
+    useWarmUp = false;
+    useProbing = true;
     return this;
   }
 
@@ -28,7 +36,11 @@ public class KeychainModuleBuilder {
     if (useWarmUp) {
       return KeychainModule.withWarming(reactContext);
     } else {
-      return new KeychainModule(reactContext);
+      if (useProbing) {
+        return KeychainModule.withBiometryProbing(reactContext);
+      } else {
+        return new KeychainModule(reactContext, new BiometricCapabilitiesHelper(reactContext));
+      }
     }
   }
 
