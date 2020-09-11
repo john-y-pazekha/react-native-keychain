@@ -51,7 +51,7 @@ export default class KeychainExample extends Component {
   };
 
   componentDidMount() {
-    Keychain.getSupportedBiometryType({}).then(biometryType => {
+    Keychain.getSupportedBiometryType({}).then((biometryType) => {
       this.setState({ biometryType });
     });
   }
@@ -75,8 +75,9 @@ export default class KeychainExample extends Component {
       this.setState({
         username: '',
         password: '',
-        status: `Credentials saved! takes: ${end.getTime() -
-          start.getTime()} millis`,
+        status: `Credentials saved! takes: ${
+          end.getTime() - start.getTime()
+        } millis`,
       });
     } catch (err) {
       this.setState({ status: 'Could not save credentials, ' + err });
@@ -114,6 +115,15 @@ export default class KeychainExample extends Component {
       });
     } catch (err) {
       this.setState({ status: 'Could not reset credentials, ' + err });
+    }
+  }
+
+  async getAll() {
+    try {
+      const result = await Keychain.getAllGenericPasswordServices();
+      this.setState({ status: `All keys successfully fetched! Found: ${result.length} keys.` });
+    } catch (err) {
+      this.setState({ status: 'Could not get all keys. ' + err });
     }
   }
 
@@ -164,7 +174,7 @@ export default class KeychainExample extends Component {
               onSubmitEditing={() => {
                 this.passwordTextInput.focus();
               }}
-              onChange={event =>
+              onChange={(event) =>
                 this.setState({ username: event.nativeEvent.text })
               }
               underlineColorAndroid="transparent"
@@ -179,10 +189,10 @@ export default class KeychainExample extends Component {
               password={true}
               autoCapitalize="none"
               value={this.state.password}
-              ref={input => {
+              ref={(input) => {
                 this.passwordTextInput = input;
               }}
-              onChange={event =>
+              onChange={(event) =>
                 this.setState({ password: event.nativeEvent.text })
               }
               underlineColorAndroid="transparent"
@@ -197,7 +207,7 @@ export default class KeychainExample extends Component {
                   ? [...VALUES, this.state.biometryType]
                   : VALUES
               }
-              onTabPress={index =>
+              onTabPress={(index) =>
                 this.setState({
                   ...this.state,
                   accessControl: AC_MAP[index],
@@ -212,7 +222,7 @@ export default class KeychainExample extends Component {
               <SegmentedControlTab
                 selectedIndex={this.state.selectedSecurityIndex}
                 values={SECURITY_LEVEL_OPTIONS}
-                onTabPress={index =>
+                onTabPress={(index) =>
                   this.setState({
                     ...this.state,
                     securityLevel: SL_MAP[index],
@@ -225,7 +235,7 @@ export default class KeychainExample extends Component {
               <SegmentedControlTab
                 selectedIndex={this.state.selectedStorageIndex}
                 values={SECURITY_STORAGE_OPTIONS}
-                onTabPress={index =>
+                onTabPress={(index) =>
                   this.setState({
                     ...this.state,
                     storageSelection: ST_MAP[index],
@@ -264,6 +274,17 @@ export default class KeychainExample extends Component {
             >
               <View style={styles.reset}>
                 <Text style={styles.buttonText}>Reset</Text>
+              </View>
+            </TouchableHighlight>
+          </View>
+
+          <View style={[styles.buttons, styles.centerButtons]}>
+            <TouchableHighlight
+              onPress={() => this.getAll()}
+              style={styles.button}
+            >
+              <View style={styles.reset}>
+                <Text style={styles.buttonText}>Get All Keychain Data</Text>
               </View>
             </TouchableHighlight>
           </View>
